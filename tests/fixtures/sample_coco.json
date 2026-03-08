@@ -1,0 +1,52 @@
+{
+  "info": {
+    "description": "AnnotFlow テスト用サンプルデータ（COCO形式）",
+    "version": "1.0",
+    "year": 2024
+  },
+  "categories": [
+    {"id": 1, "name": "dog", "supercategory": "animal"},
+    {"id": 2, "name": "cat", "supercategory": "animal"},
+    {"id": 3, "name": "car", "supercategory": "vehicle"}
+  ],
+  "images": [
+    {"id": 1, "file_name": "image_001.jpg", "width": 640, "height": 480},
+    {"id": 2, "file_name": "image_002.jpg", "width": 800, "height": 600},
+    {"id": 3, "file_name": "image_003.jpg", "width": 640, "height": 480}
+  ],
+  "annotations": [
+    {
+      "id": 1,
+      "image_id": 1,
+      "category_id": 1,
+      "bbox": [10, 20, 90, 130],
+      "area": 11700,
+      "iscrowd": 0
+    },
+    {
+      "id": 2,
+      "image_id": 1,
+      "category_id": 2,
+      "bbox": [200, 50, 150, 150],
+      "area": 22500,
+      "iscrowd": 0,
+      "segmentation": [[200, 50, 350, 50, 350, 200, 200, 200]]
+    },
+    {
+      "id": 3,
+      "image_id": 2,
+      "category_id": 3,
+      "bbox": [50, 100, 350, 250],
+      "area": 87500,
+      "iscrowd": 0
+    },
+    {
+      "id": 4,
+      "image_id": 3,
+      "category_id": 1,
+      "bbox": [30, 40, 200, 180],
+      "area": 36000,
+      "iscrowd": 0
+    }
+  ]
+}

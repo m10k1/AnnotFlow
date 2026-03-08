@@ -1,0 +1,7 @@
+names:
+  - dog
+  - cat
+  - car
+nc: 3
+train: images/train
+val: images/val

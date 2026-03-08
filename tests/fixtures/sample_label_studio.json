@@ -1,0 +1,111 @@
+[
+  {
+    "id": 1,
+    "file_upload": "abcdef12-image_001.jpg",
+    "annotations": [
+      {
+        "id": 101,
+        "completed_by": {"id": 1, "email": "annotator_a@example.com"},
+        "was_cancelled": false,
+        "result": [
+          {
+            "id": "bbox_001",
+            "type": "rectanglelabels",
+            "from_name": "label",
+            "to_name": "image",
+            "original_width": 640,
+            "original_height": 480,
+            "value": {
+              "x": 1.5625,
+              "y": 4.1667,
+              "width": 14.0625,
+              "height": 27.0833,
+              "rotation": 0,
+              "rectanglelabels": ["dog"]
+            }
+          },
+          {
+            "id": "bbox_002",
+            "type": "rectanglelabels",
+            "from_name": "label",
+            "to_name": "image",
+            "original_width": 640,
+            "original_height": 480,
+            "value": {
+              "x": 31.25,
+              "y": 10.4167,
+              "width": 23.4375,
+              "height": 31.25,
+              "rotation": 0,
+              "rectanglelabels": ["cat"]
+            }
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "id": 2,
+    "file_upload": "deadbeef-image_002.jpg",
+    "annotations": [
+      {
+        "id": 201,
+        "completed_by": {"id": 1, "email": "annotator_a@example.com"},
+        "was_cancelled": false,
+        "result": [
+          {
+            "id": "bbox_003",
+            "type": "rectanglelabels",
+            "from_name": "label",
+            "to_name": "image",
+            "original_width": 800,
+            "original_height": 600,
+            "value": {
+              "x": 6.25,
+              "y": 16.6667,
+              "width": 43.75,
+              "height": 41.6667,
+              "rotation": 0,
+              "rectanglelabels": ["car"]
+            }
+          }
+        ]
+      },
+      {
+        "id": 202,
+        "completed_by": {"id": 2, "email": "annotator_b@example.com"},
+        "was_cancelled": false,
+        "result": [
+          {
+            "id": "bbox_004",
+            "type": "rectanglelabels",
+            "from_name": "label",
+            "to_name": "image",
+            "original_width": 800,
+            "original_height": 600,
+            "value": {
+              "x": 6.25,
+              "y": 16.6667,
+              "width": 43.75,
+              "height": 41.6667,
+              "rotation": 0,
+              "rectanglelabels": ["car"]
+            }
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "id": 3,
+    "file_upload": "cafebabe-image_003.jpg",
+    "annotations": [
+      {
+        "id": 301,
+        "completed_by": {"id": 1, "email": "annotator_a@example.com"},
+        "was_cancelled": true,
+        "result": []
+      }
+    ]
+  }
+]

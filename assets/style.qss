@@ -1,0 +1,362 @@
+/* AnnotFlow - アプリケーション全体のスタイル定義（ダークモード）
+ *
+ * 個別ウィジェットへの setStyleSheet() は禁止。
+ * 動的な状態変更は setProperty() + QSS セレクタで制御すること。
+ */
+
+/* ------------------------------------------------------------------ */
+/* ベースカラー                                                          */
+/* ------------------------------------------------------------------ */
+QWidget {
+    background-color: #1e1e2e;
+    color: #cdd6f4;
+    font-family: "Segoe UI", "Yu Gothic UI", sans-serif;
+    font-size: 13px;
+}
+
+/* ------------------------------------------------------------------ */
+/* ボタン                                                               */
+/* ------------------------------------------------------------------ */
+QPushButton {
+    background-color: #313244;
+    border: 1px solid #45475a;
+    border-radius: 6px;
+    padding: 6px 16px;
+}
+
+QPushButton:hover {
+    background-color: #45475a;
+}
+
+QPushButton:pressed {
+    background-color: #585b70;
+}
+
+QPushButton:disabled {
+    color: #585b70;
+    border-color: #313244;
+}
+
+/* プライマリボタン（重要な実行ボタン） */
+QPushButton[role="primary"] {
+    background-color: #89b4fa;
+    color: #1e1e2e;
+    border: none;
+    font-weight: bold;
+}
+
+QPushButton[role="primary"]:hover {
+    background-color: #b4d0fb;
+}
+
+QPushButton[role="primary"]:disabled {
+    background-color: #313244;
+    color: #585b70;
+}
+
+/* 危険なアクション（削除など）用ボタン */
+QPushButton[role="danger"] {
+    background-color: #f38ba8;
+    color: #1e1e2e;
+    border: none;
+}
+
+QPushButton[role="danger"]:hover {
+    background-color: #f5a5b8;
+}
+
+/* ------------------------------------------------------------------ */
+/* タブ                                                                 */
+/* ------------------------------------------------------------------ */
+QTabBar::tab {
+    background-color: #181825;
+    color: #a6adc8;
+    padding: 8px 20px;
+    border: none;
+    border-bottom: 2px solid transparent;
+}
+
+QTabBar::tab:selected {
+    color: #cdd6f4;
+    border-bottom: 2px solid #89b4fa;
+}
+
+QTabBar::tab:hover:!selected {
+    background-color: #313244;
+    color: #cdd6f4;
+}
+
+QTabWidget::pane {
+    border: 1px solid #313244;
+    background-color: #1e1e2e;
+}
+
+/* ------------------------------------------------------------------ */
+/* テキスト入力・スピンボックス                                           */
+/* ------------------------------------------------------------------ */
+QLineEdit,
+QTextEdit,
+QPlainTextEdit,
+QSpinBox,
+QDoubleSpinBox,
+QComboBox {
+    background-color: #181825;
+    border: 1px solid #45475a;
+    border-radius: 4px;
+    padding: 4px 8px;
+    color: #cdd6f4;
+    selection-background-color: #89b4fa;
+    selection-color: #1e1e2e;
+}
+
+QLineEdit:focus,
+QTextEdit:focus,
+QPlainTextEdit:focus,
+QSpinBox:focus,
+QDoubleSpinBox:focus,
+QComboBox:focus {
+    border-color: #89b4fa;
+}
+
+QLineEdit[state="error"] {
+    border-color: #f38ba8;
+}
+
+QLineEdit[state="warning"] {
+    border-color: #fab387;
+}
+
+QComboBox::drop-down {
+    border: none;
+    padding-right: 8px;
+}
+
+QComboBox QAbstractItemView {
+    background-color: #181825;
+    border: 1px solid #45475a;
+    selection-background-color: #313244;
+}
+
+/* ------------------------------------------------------------------ */
+/* テーブル・リスト                                                      */
+/* ------------------------------------------------------------------ */
+QTableWidget,
+QListWidget,
+QTreeWidget {
+    background-color: #181825;
+    border: 1px solid #313244;
+    gridline-color: #313244;
+    alternate-background-color: #1e1e2e;
+}
+
+QTableWidget::item,
+QListWidget::item,
+QTreeWidget::item {
+    padding: 4px 8px;
+}
+
+QTableWidget::item:selected,
+QListWidget::item:selected,
+QTreeWidget::item:selected {
+    background-color: #313244;
+    color: #cdd6f4;
+}
+
+QHeaderView::section {
+    background-color: #181825;
+    color: #a6adc8;
+    padding: 6px 8px;
+    border: none;
+    border-right: 1px solid #313244;
+    border-bottom: 1px solid #313244;
+    font-weight: bold;
+}
+
+/* ------------------------------------------------------------------ */
+/* プログレスバー                                                        */
+/* ------------------------------------------------------------------ */
+QProgressBar {
+    border: none;
+    border-radius: 4px;
+    background-color: #313244;
+    text-align: center;
+    color: #cdd6f4;
+    height: 12px;
+}
+
+QProgressBar::chunk {
+    background-color: #89b4fa;
+    border-radius: 4px;
+}
+
+/* ------------------------------------------------------------------ */
+/* スクロールバー                                                        */
+/* ------------------------------------------------------------------ */
+QScrollBar:vertical {
+    background-color: #181825;
+    width: 10px;
+    margin: 0;
+    border-radius: 5px;
+}
+
+QScrollBar::handle:vertical {
+    background-color: #45475a;
+    border-radius: 5px;
+    min-height: 20px;
+}
+
+QScrollBar::handle:vertical:hover {
+    background-color: #585b70;
+}
+
+QScrollBar::add-line:vertical,
+QScrollBar::sub-line:vertical {
+    height: 0;
+}
+
+QScrollBar:horizontal {
+    background-color: #181825;
+    height: 10px;
+    margin: 0;
+    border-radius: 5px;
+}
+
+QScrollBar::handle:horizontal {
+    background-color: #45475a;
+    border-radius: 5px;
+    min-width: 20px;
+}
+
+QScrollBar::handle:horizontal:hover {
+    background-color: #585b70;
+}
+
+QScrollBar::add-line:horizontal,
+QScrollBar::sub-line:horizontal {
+    width: 0;
+}
+
+/* ------------------------------------------------------------------ */
+/* スプリッター                                                          */
+/* ------------------------------------------------------------------ */
+QSplitter::handle {
+    background-color: #313244;
+    width: 2px;
+    height: 2px;
+}
+
+/* ------------------------------------------------------------------ */
+/* ステータスバー                                                        */
+/* ------------------------------------------------------------------ */
+QStatusBar {
+    background-color: #181825;
+    color: #a6adc8;
+    border-top: 1px solid #313244;
+}
+
+/* ------------------------------------------------------------------ */
+/* ダイアログ・メッセージボックス                                         */
+/* ------------------------------------------------------------------ */
+QDialog {
+    background-color: #1e1e2e;
+}
+
+QMessageBox {
+    background-color: #1e1e2e;
+}
+
+/* ------------------------------------------------------------------ */
+/* グループボックス                                                      */
+/* ------------------------------------------------------------------ */
+QGroupBox {
+    border: 1px solid #45475a;
+    border-radius: 6px;
+    margin-top: 12px;
+    padding-top: 8px;
+    font-weight: bold;
+}
+
+QGroupBox::title {
+    subcontrol-origin: margin;
+    left: 10px;
+    color: #89b4fa;
+}
+
+/* ------------------------------------------------------------------ */
+/* チェックボックス・ラジオボタン                                         */
+/* ------------------------------------------------------------------ */
+QCheckBox,
+QRadioButton {
+    spacing: 6px;
+}
+
+QCheckBox::indicator,
+QRadioButton::indicator {
+    width: 16px;
+    height: 16px;
+    border: 1px solid #45475a;
+    border-radius: 3px;
+    background-color: #181825;
+}
+
+QCheckBox::indicator:checked,
+QRadioButton::indicator:checked {
+    background-color: #89b4fa;
+    border-color: #89b4fa;
+}
+
+QRadioButton::indicator {
+    border-radius: 8px;
+}
+
+/* ------------------------------------------------------------------ */
+/* スライダー                                                           */
+/* ------------------------------------------------------------------ */
+QSlider::groove:horizontal {
+    height: 4px;
+    background-color: #313244;
+    border-radius: 2px;
+}
+
+QSlider::handle:horizontal {
+    background-color: #89b4fa;
+    border-radius: 8px;
+    width: 16px;
+    height: 16px;
+    margin: -6px 0;
+}
+
+QSlider::sub-page:horizontal {
+    background-color: #89b4fa;
+    border-radius: 2px;
+}
+
+/* ------------------------------------------------------------------ */
+/* ツールチップ                                                          */
+/* ------------------------------------------------------------------ */
+QToolTip {
+    background-color: #313244;
+    color: #cdd6f4;
+    border: 1px solid #45475a;
+    border-radius: 4px;
+    padding: 4px 8px;
+}
+
+/* ------------------------------------------------------------------ */
+/* ラベル（状態別）                                                      */
+/* ------------------------------------------------------------------ */
+QLabel[state="error"] {
+    color: #f38ba8;
+}
+
+QLabel[state="warning"] {
+    color: #fab387;
+}
+
+QLabel[state="success"] {
+    color: #a6e3a1;
+}
+
+QLabel[state="info"] {
+    color: #89b4fa;
+}
