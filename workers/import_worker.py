@@ -6,7 +6,19 @@ ImportWorker（QThread）
 """
 from __future__ import annotations
 
+from pathlib import Path
+
 from PySide6.QtCore import QThread, Signal
+
+from parsers.coco_parser import CocoParser
+from parsers.label_studio_parser import LabelStudioParser
+from parsers.yolo_parser import YoloParser
+
+_PARSERS = {
+    "coco": CocoParser,
+    "yolo": YoloParser,
+    "label_studio": LabelStudioParser,
+}
 
 
 class ImportWorker(QThread):
@@ -31,11 +43,45 @@ class ImportWorker(QThread):
         self._file_path = file_path
         self._image_folder = image_folder
         self._fmt = fmt
-        self._cancelled = False     # キャンセルフラグ
+        self._cancelled = False
 
     def run(self) -> None:
-        """バックグラウンドでインポート処理を実行する（Phase 1 で実装）。"""
-        raise NotImplementedError("Phase 1 で実装する")
+        """バックグラウンドでインポート処理を実行する。"""
+        try:
+            parser_class = _PARSERS.get(self._fmt)
+            if parser_class is None:
+                self.error.emit(f"未対応のフォーマット: {self._fmt}")
+                return
+
+            self.status_message.emit(f"読み込み中: {self._file_path}")
+            self.progress.emit(10)
+
+            if self._cancelled:
+                return
+
+            parser = parser_class()
+            dataset, skipped_records = parser.parse(
+                Path(self._file_path),
+                Path(self._image_folder),
+            )
+
+            self.progress.emit(90)
+
+            if self._cancelled:
+                return
+
+            if skipped_records:
+                self.skipped.emit(skipped_records)
+
+            self.progress.emit(100)
+            self.status_message.emit(
+                f"インポート完了: {len(dataset.records)} 件"
+                + (f"（スキップ: {len(skipped_records)} 件）" if skipped_records else "")
+            )
+            self.finished.emit(dataset)
+
+        except Exception as exc:  # noqa: BLE001
+            self.error.emit(str(exc))
 
     def cancel(self) -> None:
         """キャンセルフラグを立てる（強制終了しない）。"""

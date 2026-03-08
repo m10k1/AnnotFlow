@@ -140,7 +140,12 @@ def merge_datasets_dry_run(
 
     - パターン1（同名・異ID）: 名前を正として自動解決
     - パターン2（片方のみ存在）: 和集合として自動解決
-    - パターン3（同ID・異名）: 解決せず unresolved_conflicts に積む
+    - パターン3（同ID・異名 かつ 両名前が排他的）: 解決せず unresolved_conflicts に積む
+
+    パターン3の判定基準:
+        同一IDに異なる名前が割り当てられており、かつ「name_a が ds_b に存在せず、
+        name_b が ds_a にも存在しない」場合のみパターン3と判定する。
+        片方の名前でも相手のデータセットに存在する場合はパターン1/2として自動解決。
 
     Args:
         datasets: マージ対象のDatasetリスト
@@ -155,7 +160,7 @@ def merge_datasets_dry_run(
     conflict_report: list[dict] = []
     unresolved_conflicts: list[MergeConflict] = []
 
-    # 全データセットのクラス名の和集合を名前ベースで収集
+    # 全データセットのクラス名の和集合を名前ベースで収集（初出順でIDを採番）
     all_names: list[str] = []
     for ds in datasets:
         for name in ds.class_map.name_to_id:
@@ -164,6 +169,18 @@ def merge_datasets_dry_run(
 
     # 新しいClassMapを0始まりで構築
     merged_class_map = ClassMap.from_names(all_names)
+
+    # クラスレベルの変更ログを conflict_report に記録（レコードの有無によらず）
+    for ds_idx, ds in enumerate(datasets):
+        for old_id, name in ds.class_map.id_to_name.items():
+            new_id = merged_class_map.name_to_id.get(name)
+            if new_id is not None and new_id != old_id:
+                conflict_report.append({
+                    "dataset": dataset_labels[ds_idx],
+                    "class_name": name,
+                    "old_id": old_id,
+                    "new_id": new_id,
+                })
 
     # 全レコードを収集し、class_idを新ClassMapに基づいて再採番
     merged_records: list[ImageRecord] = []
@@ -177,15 +194,6 @@ def merge_datasets_dry_run(
                     # クラスIDに対応する名前が存在しない場合はスキップ
                     continue
                 new_id = merged_class_map.name_to_id[name]
-
-                # 変更があれば conflict_report に記録
-                if old_id != new_id:
-                    conflict_report.append({
-                        "dataset": dataset_labels[ds_idx],
-                        "class_name": name,
-                        "old_id": old_id,
-                        "new_id": new_id,
-                    })
 
                 new_annotations.append(Annotation(
                     class_id=new_id,
@@ -207,34 +215,48 @@ def merge_datasets_dry_run(
                 cluster_id=record.cluster_id,
             ))
 
-    # パターン3の検出（同ID・異なるクラス名）
-    # 各データセット間で同じIDに異なる名前が割り当てられているケースを探す
+    # パターン3の検出：同ID・異クラス名 かつ 2データセット間に共通クラスが存在しない
+    #
+    # 判定ルール（仕様書の例より導出）:
+    #   - パターン1: 同名クラスが両方に存在（IDは違う）→ 共通クラスあり → 自動解決
+    #   - パターン2: 片方だけに存在するクラス + 共通クラスあり → 和集合で自動解決
+    #   - パターン3: 2データセット間に共通クラスが一切なく、同IDに異なる名前が存在
+    #
+    # 根拠: 共通クラスが「アンカー」として機能し、IDの再採番が可能になる。
+    #       共通クラスが皆無の場合、「同じID=0 でも dog と cat は本当に同一物か?」
+    #       を自動判断できず、ユーザー確認が必要。
     for i in range(len(datasets)):
         for j in range(i + 1, len(datasets)):
             ds_a = datasets[i]
             ds_b = datasets[j]
+            names_a = set(ds_a.class_map.name_to_id.keys())
+            names_b = set(ds_b.class_map.name_to_id.keys())
+
+            # 共通クラスが存在する場合はパターン1/2として自動解決 → Pattern 3 なし
+            if names_a & names_b:
+                continue
+
+            # 共通クラスなし → 同ID・異名ならすべてパターン3
             for id_a, name_a in ds_a.class_map.id_to_name.items():
                 name_b = ds_b.class_map.id_to_name.get(id_a)
-                if name_b is not None and name_b != name_a:
-                    # 同ID・異なる名前（パターン3）
-                    # ただし、どちらの名前も and_names に含まれているため
-                    # 自動解決はせず unresolved_conflicts に積む
-                    conflict = MergeConflict(
-                        conflicting_id=id_a,
-                        name_from_dataset_a=name_a,
-                        name_from_dataset_b=name_b,
-                        dataset_a_label=dataset_labels[i],
-                        dataset_b_label=dataset_labels[j],
-                    )
-                    # 重複チェック（同じ競合を重複登録しない）
-                    already_exists = any(
-                        c.conflicting_id == id_a
-                        and c.name_from_dataset_a == name_a
-                        and c.name_from_dataset_b == name_b
-                        for c in unresolved_conflicts
-                    )
-                    if not already_exists:
-                        unresolved_conflicts.append(conflict)
+                if name_b is None or name_b == name_a:
+                    continue
+
+                conflict = MergeConflict(
+                    conflicting_id=id_a,
+                    name_from_dataset_a=name_a,
+                    name_from_dataset_b=name_b,
+                    dataset_a_label=dataset_labels[i],
+                    dataset_b_label=dataset_labels[j],
+                )
+                already_exists = any(
+                    c.conflicting_id == id_a
+                    and c.name_from_dataset_a == name_a
+                    and c.name_from_dataset_b == name_b
+                    for c in unresolved_conflicts
+                )
+                if not already_exists:
+                    unresolved_conflicts.append(conflict)
 
     merged_dataset = Dataset(
         records=merged_records,

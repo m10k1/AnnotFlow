@@ -1,15 +1,15 @@
 """
 Label Studio JSON フォーマットのパーサー
-
-Label Studio からエクスポートした JSON ファイルを読み込んで
-内部データモデル（Dataset）に変換する。
 """
 from __future__ import annotations
 
+import json
 import re
 from pathlib import Path
 
-from core.dataset import Dataset
+from PIL import Image
+
+from core.dataset import Annotation, BoundingBox, ClassMap, Dataset, ImageRecord
 from parsers.base_parser import BaseParser
 
 
@@ -24,19 +24,11 @@ def restore_original_filename(file_upload: str) -> str:
 
     Label Studio の付与形式: "{8文字の16進数}-{元のファイル名}"
     例: "abcdef12-original_name.jpg" → "original_name.jpg"
-
-    Args:
-        file_upload: Label Studio が付与したファイル名（接頭辞付き）
-
-    Returns:
-        接頭辞を除去した元のファイル名。パターンに一致しない場合はそのまま返す。
     """
-    # 8文字の16進数 + ハイフン で始まる場合のみ ID 接頭辞を除去する
     pattern = r'^[0-9a-f]{8}-(.+)$'
     match = re.match(pattern, file_upload, re.IGNORECASE)
     if match:
-        return match.group(1)   # 接頭辞を除いた元のファイル名を返す
-    # パターンに一致しない場合は file_upload の値をそのまま返す（安全なフォールバック）
+        return match.group(1)
     return file_upload
 
 
@@ -46,27 +38,17 @@ def find_image_file(image_folder: Path, file_upload: str) -> Path | None:
     1. 復元した元のファイル名で検索
     2. 見つからなければ file_upload の値（ID付き）で検索
     3. どちらも見つからなければ None を返す（スキップ対象）
-
-    Args:
-        image_folder: 画像フォルダのパス
-        file_upload: Label Studio が付与したファイル名
-
-    Returns:
-        見つかった画像ファイルの Path。見つからない場合は None。
     """
     original_name = restore_original_filename(file_upload)
 
-    # 1. 元のファイル名で検索
     candidate = image_folder / original_name
     if candidate.exists():
         return candidate
 
-    # 2. ID付きファイル名で検索（Label Studio がそのまま保存した場合）
     candidate = image_folder / file_upload
     if candidate.exists():
         return candidate
 
-    # 3. 見つからない場合は None（スキップ対象としてskipped_recordsに追加する）
     return None
 
 
@@ -85,24 +67,101 @@ class LabelStudioParser(BaseParser):
         """
         Label Studio JSON を読み込んで Dataset に変換する。
 
-        Args:
-            annotation_path: Label Studio エクスポートJSONのパス
-            image_folder: 画像フォルダのパス
+        複数アノテーターがいる場合は最初の非キャンセルアノテーションを採用する。
 
         Returns:
             (Dataset, skipped_records) のタプル
         """
-        raise NotImplementedError("Phase 1 で実装する")
+        items: list[dict] = json.loads(annotation_path.read_text(encoding="utf-8"))
+
+        class_map = ClassMap.from_names([])
+        records: list[ImageRecord] = []
+        skipped: list[dict] = []
+
+        for item in items:
+            file_upload: str = item.get("file_upload", "")
+            img_path = find_image_file(image_folder, file_upload)
+
+            if img_path is None:
+                skipped.append({"file_upload": file_upload, "reason": "image_not_found"})
+                continue
+
+            original_filename = restore_original_filename(file_upload)
+
+            # was_cancelled でない最初のアノテーションを採用
+            chosen_annotation: dict | None = None
+            for ann in item.get("annotations", []):
+                if not ann.get("was_cancelled", False):
+                    chosen_annotation = ann
+                    break
+
+            annotations: list[Annotation] = []
+            if chosen_annotation is not None:
+                for result in chosen_annotation.get("result", []):
+                    if result.get("type") != "rectanglelabels":
+                        continue
+                    value = result["value"]
+                    labels_list: list[str] = value.get("rectanglelabels", [])
+                    if not labels_list:
+                        continue
+                    class_name = labels_list[0]
+                    class_id = class_map.get_or_add(class_name)
+
+                    orig_w = result.get("original_width", 1)
+                    orig_h = result.get("original_height", 1)
+                    x_pct = value["x"]
+                    y_pct = value["y"]
+                    w_pct = value["width"]
+                    h_pct = value["height"]
+
+                    x_min = x_pct / 100.0 * orig_w
+                    y_min = y_pct / 100.0 * orig_h
+                    x_max = (x_pct + w_pct) / 100.0 * orig_w
+                    y_max = (y_pct + h_pct) / 100.0 * orig_h
+
+                    annotations.append(Annotation(
+                        class_id=class_id,
+                        class_name=class_name,
+                        bbox=BoundingBox(x_min=x_min, y_min=y_min, x_max=x_max, y_max=y_max),
+                    ))
+
+            with Image.open(img_path) as pil_img:
+                img_w, img_h = pil_img.size
+
+            records.append(ImageRecord(
+                image_id=str(item.get("id", "")),
+                original_filename=original_filename,
+                file_path=str(img_path),
+                width=img_w,
+                height=img_h,
+                annotations=annotations,
+            ))
+
+        dataset = Dataset(records=records, class_map=class_map, source_format="label_studio")
+        return dataset, skipped
 
     def scan_annotators(self, annotation_path: Path) -> list[dict]:
         """
         アノテーションファイルを事前スキャンしてアノテーター一覧を返す。
 
-        Args:
-            annotation_path: Label Studio エクスポートJSONのパス
-
         Returns:
-            アノテーター情報のリスト
-            例: [{"id": 1, "email": "user@example.com"}]
+            アノテーター情報のリスト: [{"id": 1, "email": "user@example.com"}, ...]
         """
-        raise NotImplementedError("Phase 1 で実装する")
+        items: list[dict] = json.loads(annotation_path.read_text(encoding="utf-8"))
+        seen_ids: set[int] = set()
+        annotators: list[dict] = []
+
+        for item in items:
+            for ann in item.get("annotations", []):
+                if ann.get("was_cancelled", False):
+                    continue
+                completed_by = ann.get("completed_by", {})
+                uid = completed_by.get("id")
+                if uid is not None and uid not in seen_ids:
+                    seen_ids.add(uid)
+                    annotators.append({
+                        "id": uid,
+                        "email": completed_by.get("email", ""),
+                    })
+
+        return annotators
