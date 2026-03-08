@@ -9,7 +9,7 @@ from __future__ import annotations
 import pytest
 
 from core.dataset import Annotation, BoundingBox, ClassMap, Dataset, ImageRecord
-from core.splitter import split_random, split_stratified
+from core.splitter import split_random, split_random_with_clusters, split_stratified
 
 
 # ---------------------------------------------------------------------------
@@ -176,3 +176,121 @@ def test_stratified_split_reproducibility():
     splits1 = {r.image_id: r.split for r in result1.records}
     splits2 = {r.image_id: r.split for r in result2.records}
     assert splits1 == splits2
+
+
+# ---------------------------------------------------------------------------
+# split_random_with_clusters のテスト（方式C：CLIPクラスタベース比例配分）
+# ---------------------------------------------------------------------------
+
+def _make_clustered_dataset(n_clusters: int, per_cluster: int) -> Dataset:
+    """
+    各クラスタに per_cluster 件ずつ含む Dataset を生成する。
+    cluster_id が設定済みの ImageRecord を持つ。
+    """
+    class_map = ClassMap.from_names(["dog"])
+    records = []
+    for cid in range(n_clusters):
+        for j in range(per_cluster):
+            idx = cid * per_cluster + j
+            records.append(ImageRecord(
+                image_id=str(idx),
+                original_filename=f"img_{idx:03d}.jpg",
+                file_path=f"/tmp/img_{idx:03d}.jpg",
+                width=640,
+                height=480,
+                annotations=[],
+                cluster_id=cid,
+            ))
+    return Dataset(records=records, class_map=class_map, source_format="coco")
+
+
+def test_cluster_based_split_total_count():
+    """クラスタ分割後の合計件数が元と一致すること。"""
+    dataset = _make_clustered_dataset(n_clusters=3, per_cluster=10)
+    result = split_random_with_clusters(dataset, 0.7, 0.2, 0.1, seed=42)
+
+    assert len(result.records) == 30
+    for r in result.records:
+        assert r.split in ("train", "val", "test"), f"無効な split 値: {r.split!r}"
+
+
+def test_cluster_based_split_proportional_within_each_cluster():
+    """
+    データリーク防止ルール検証（正しい実装）:
+    各クラスタ内で train / val / test に比例配分されること。
+    クラスタが単一の split に固められていないこと。
+    """
+    # 3クラスタ × 15件 = 45件（各クラスタで 7:2:1 比率 → train≈10, val≈3, test≈2）
+    dataset = _make_clustered_dataset(n_clusters=3, per_cluster=15)
+    result = split_random_with_clusters(dataset, 0.7, 0.2, 0.1, seed=42)
+
+    for cid in range(3):
+        cluster_records = [r for r in result.records if r.cluster_id == cid]
+        splits_in_cluster = {r.split for r in cluster_records}
+        # 15件のクラスタ内に train と val の両方が存在すること（比例配分の証明）
+        assert "train" in splits_in_cluster, (
+            f"クラスタ {cid} に train が含まれていない（データリーク防止ルール違反の疑い）"
+        )
+        assert "val" in splits_in_cluster, (
+            f"クラスタ {cid} に val が含まれていない（データリーク防止ルール違反の疑い）"
+        )
+
+
+def test_cluster_based_split_no_duplicate():
+    """同一 image_id が複数の split に重複して割り当てられないこと。"""
+    dataset = _make_clustered_dataset(n_clusters=4, per_cluster=10)
+    result = split_random_with_clusters(dataset, 0.7, 0.2, 0.1, seed=42)
+
+    image_ids = [r.image_id for r in result.records]
+    assert len(image_ids) == len(set(image_ids)), "同一 image_id が複数存在する"
+
+
+def test_cluster_based_split_reproducibility():
+    """同一シード値で2回分割した結果が一致すること（再現性）。"""
+    dataset = _make_clustered_dataset(n_clusters=3, per_cluster=10)
+    result1 = split_random_with_clusters(dataset, 0.7, 0.2, 0.1, seed=99)
+    result2 = split_random_with_clusters(dataset, 0.7, 0.2, 0.1, seed=99)
+
+    splits1 = {r.image_id: r.split for r in result1.records}
+    splits2 = {r.image_id: r.split for r in result2.records}
+    assert splits1 == splits2
+
+
+def test_cluster_based_split_fallback_when_no_cluster_id():
+    """cluster_id が None のレコードがある場合、split_random にフォールバックすること。"""
+    # cluster_id が None のデータセット
+    class_map = ClassMap.from_names(["dog"])
+    records = [
+        ImageRecord(
+            image_id=str(i),
+            original_filename=f"img_{i}.jpg",
+            file_path=f"/tmp/img_{i}.jpg",
+            width=640, height=480,
+            annotations=[],
+            cluster_id=None,  # 未設定
+        )
+        for i in range(20)
+    ]
+    dataset = Dataset(records=records, class_map=class_map, source_format="coco")
+    result = split_random_with_clusters(dataset, 0.7, 0.2, 0.1, seed=42)
+
+    # フォールバックでランダム分割が行われること
+    assert len(result.records) == 20
+    assert all(r.split in ("train", "val", "test") for r in result.records)
+
+
+def test_cluster_based_split_not_cluster_grouped():
+    """
+    データリーク防止ルール：クラスタが単一の split に固められていないこと。
+    各クラスタ内で split が混在していること。
+    """
+    # 3クラスタ × 20件 = 60件（十分な件数でテスト）
+    dataset = _make_clustered_dataset(n_clusters=3, per_cluster=20)
+    result = split_random_with_clusters(dataset, 0.7, 0.2, 0.1, seed=42)
+
+    for cid in range(3):
+        cluster_splits = {r.split for r in result.records if r.cluster_id == cid}
+        assert len(cluster_splits) > 1, (
+            f"クラスタ {cid} が単一の split に固められている"
+            "（データリーク防止ルール違反: 禁止事項）"
+        )

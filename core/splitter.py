@@ -3,6 +3,7 @@ train/val/test 分割ロジック
 
 方式A：ランダム分割
 方式B：マルチラベル層化分割（iterative-stratification を使用）
+方式C：CLIPクラスタベース比例配分（データリーク防止対応）
 
 PySide6 のUIクラスは一切インポートしない（MVC分離ルール厳守）。
 """
@@ -198,6 +199,87 @@ def split_stratified(
     except ImportError:
         # iterative-stratification がインポートできない場合はランダム分割にフォールバック
         return split_random(dataset, train_ratio, val_ratio, test_ratio, seed=seed)
+
+    new_records = _assign_splits(records, split_labels)
+
+    return Dataset(
+        records=new_records,
+        class_map=dataset.class_map,
+        source_format=dataset.source_format,
+    )
+
+
+# ---------------------------------------------------------------------------
+# 方式C：CLIPクラスタベース比例配分（データリーク防止）
+# ---------------------------------------------------------------------------
+
+def split_random_with_clusters(
+    dataset: Dataset,
+    train_ratio: float,
+    val_ratio: float,
+    test_ratio: float,
+    seed: int = 42,
+) -> Dataset:
+    """
+    方式C：CLIPクラスタベース比例配分分割（データリーク防止対応版）。
+
+    仕様書「データリーク防止ルール」を厳守する。
+
+    ✅ 正しい実装:
+        各クラスタ内で random.shuffle してから、
+        train / val / test に比例配分（例: 8:1:1）する。
+        → 結果として各 split に全クラスタの代表画像が含まれる。
+
+    ❌ 禁止事項:
+        「同一クラスタを特定の split に固める」実装は絶対に禁止。
+
+    cluster_id が None のレコードが 1 件でも含まれている場合は
+    split_random() にフォールバックする。
+
+    Args:
+        dataset: 分割対象のデータセット（ImageRecord.cluster_id が設定済みであること）
+        train_ratio: 訓練セットの比率（0.0〜1.0）
+        val_ratio: 検証セットの比率（0.0〜1.0）
+        test_ratio: テストセットの比率（0.0〜1.0）
+        seed: 乱数シード（再現性のため）
+
+    Returns:
+        split が設定された Dataset（元のデータセットは変更しない）
+    """
+    records = list(dataset.records)
+
+    # cluster_id が未設定のレコードがある場合はランダム分割にフォールバック
+    if any(r.cluster_id is None for r in records):
+        return split_random(dataset, train_ratio, val_ratio, test_ratio, seed=seed)
+
+    # クラスタごとにインデックスをグルーピング
+    clusters: dict[int, list[int]] = {}
+    for i, record in enumerate(records):
+        cid = record.cluster_id  # type: ignore[assignment]
+        if cid not in clusters:
+            clusters[cid] = []
+        clusters[cid].append(i)
+
+    rng = random.Random(seed)
+    split_labels: list[str] = [""] * len(records)
+
+    # 各クラスタ内でシャッフルしてから比例配分する
+    # ← データリーク防止の核心：クラスタ単位でsplitを割り当てない
+    for cluster_indices in clusters.values():
+        rng.shuffle(cluster_indices)
+        n = len(cluster_indices)
+        n_train = round(n * train_ratio)
+        n_val = round(n * val_ratio)
+        n_test = n - n_train - n_val
+
+        for rank, orig_idx in enumerate(cluster_indices):
+            if rank < n_train:
+                split_labels[orig_idx] = "train"
+            elif rank < n_train + n_val:
+                split_labels[orig_idx] = "val"
+            else:
+                # test_ratio=0 の場合、余りを val に回す
+                split_labels[orig_idx] = "test" if n_test > 0 else "val"
 
     new_records = _assign_splits(records, split_labels)
 
